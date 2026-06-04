@@ -1,5 +1,4 @@
 // --- DOM元素获取 ---
-const sourceLangSelect = document.getElementById('source-language');
 const targetLangTrigger = document.getElementById('target-languages-display');
 const targetLangOptionsContainer = document.getElementById('target-languages-options');
 const targetLangContainer = document.getElementById('target-language-select-container');
@@ -16,19 +15,10 @@ let isTutorMode = false;
 // --- 语言选择相关功能 ---
 
 /**
- * 初始化时填充源语言和目标语言的下拉菜单。
- * 源语言使用标准的 <option> 元素。
+ * 初始化时填充目标语言的选择菜单。
  * 目标语言使用带复选框的自定义菜单项。
  */
 function populateLanguages() {
-  // 填充源语言下拉菜单
-  languages.forEach(lang => {
-    const sourceOption = document.createElement('option');
-    sourceOption.value = lang;
-    sourceOption.textContent = lang;
-    sourceLangSelect.appendChild(sourceOption);
-  });
-
   // 动态创建目标语言的多选菜单
   targetLangOptionsContainer.innerHTML = '';
   languages.forEach(lang => {
@@ -61,41 +51,19 @@ function updateSelectedTargetLanguages() {
   saveSettings();
 
   if (selectedTargetLanguages.length === 0) {
-    targetLangTrigger.textContent = 'Please select target languages';
+    targetLangTrigger.textContent = 'Please select';
   } else {
     targetLangTrigger.textContent = selectedTargetLanguages.join(', ');
   }
 }
 
-/**
- * 根据当前选择的源语言，禁用或启用目标语言选项。
- * 规则：目标语言不能与源语言相同。
- * 调用此函数后会同步更新已选中的目标语言列表。
- */
-function updateTargetLanguagesAvailability() {
-  const selectedSourceLang = sourceLangSelect.value;
-  targetLangOptionsContainer.querySelectorAll('.custom-select-option').forEach(optionDiv => {
-    const checkbox = optionDiv.querySelector('input[type="checkbox"]');
-    if (checkbox.value === selectedSourceLang) {
-      optionDiv.classList.add('disabled');
-      checkbox.disabled = true;
-      checkbox.checked = false;
-    } else {
-      optionDiv.classList.remove('disabled');
-      checkbox.disabled = false;
-    }
-  });
-  updateSelectedTargetLanguages();
-}
-
 // --- 设置的保存与加载 ---
 
 /**
- * 将当前的用户设置（源语言、目标语言、导师模式）保存到 chrome.storage.local。
+ * 将当前的用户设置（目标语言、导师模式）保存到 chrome.storage.local。
  */
 function saveSettings() {
   const settings = {
-    sourceLanguage: sourceLangSelect.value,
     targetLanguages: selectedTargetLanguages,
     isTutorMode: isTutorMode
   };
@@ -108,11 +76,7 @@ function saveSettings() {
 function loadSettings() {
   chrome.storage.local.get('settings', (data) => {
     if (data.settings) {
-      const { sourceLanguage, targetLanguages, isTutorMode: loadedTutorMode } = data.settings;
-      if (sourceLanguage) {
-        sourceLangSelect.value = sourceLanguage;
-      }
-
+      const { targetLanguages, isTutorMode: loadedTutorMode } = data.settings;
       selectedTargetLanguages = targetLanguages || [];
       isTutorMode = loadedTutorMode;
       // 更新UI以反映加载的设置
@@ -122,7 +86,7 @@ function loadSettings() {
         checkbox.checked = selectedTargetLanguages.includes(checkbox.value);
       });
     }
-    updateTargetLanguagesAvailability();
+    updateSelectedTargetLanguages();
   });
 }
 
@@ -141,12 +105,6 @@ targetLangOptionsContainer.addEventListener('click', (event) => {
       updateSelectedTargetLanguages();
     }
   }
-});
-
-// 监听源语言下拉菜单的变化
-sourceLangSelect.addEventListener('change', () => {
-  updateTargetLanguagesAvailability();
-  saveSettings();
 });
 
 // 监听导师模式开关的点击事件
@@ -194,109 +152,119 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function createMessageBubble(text, className, originalFullText = null) {
   const messageEl = document.createElement('div');
-  messageEl.classList.add('message', className);
+  messageEl.classList.add('message');
+  // 如果className包含多个类（用空格分隔），则逐个添加
+  if (className) {
+    className.split(' ').forEach(cls => {
+      if (cls.trim()) messageEl.classList.add(cls.trim());
+    });
+  }
 
   const textContent = document.createElement('p');
   textContent.textContent = text;
   messageEl.appendChild(textContent);
 
   // 为消息按钮创建一个容器，便于样式控制
-  const buttonContainer = document.createElement('div');
-  buttonContainer.classList.add('message-buttons');
-  messageEl.appendChild(buttonContainer);
+  const isStatusMessage = className && (className.includes('info-message') || className.includes('loading-message'));
+  
+  if (!isStatusMessage) {
+    const buttonContainer = document.createElement('div');
+    buttonContainer.classList.add('message-buttons');
+    messageEl.appendChild(buttonContainer);
 
-  if (className === 'ai-message') {
-    // AI消息：添加“反向校验”按钮
-    const checkBtn = document.createElement('button');
-    checkBtn.classList.add('reverse-check-btn');
-    checkBtn.title = 'Verify(EN)';
-    buttonContainer.appendChild(checkBtn);
+    if (className && className.includes('ai-message')) {
+      // AI消息：添加“反向校验”按钮
+      const checkBtn = document.createElement('button');
+      checkBtn.classList.add('reverse-check-btn');
+      checkBtn.title = 'Verify(EN)';
+      buttonContainer.appendChild(checkBtn);
 
-    // AI消息：添加“复制”按钮
-    const copyBtn = document.createElement('button');
-    copyBtn.classList.add('copy-btn');
-    copyBtn.title = 'Copy';
-    buttonContainer.appendChild(copyBtn);
+      // AI消息：添加“复制”按钮
+      const copyBtn = document.createElement('button');
+      copyBtn.classList.add('copy-btn');
+      copyBtn.title = 'Copy';
+      buttonContainer.appendChild(copyBtn);
 
-    copyBtn.addEventListener('click', () => {
-      // Extract the translation text (remove language prefix if present)
-      let textToCopy = originalFullText || text;
-      const colonIndex = textToCopy.indexOf(': ');
-      if (colonIndex > 0) {
-        textToCopy = textToCopy.substring(colonIndex + 2);
-      }
-
-      // Copy to clipboard
-      navigator.clipboard.writeText(textToCopy).then(() => {
-        // Visual feedback for successful copy
-        copyBtn.classList.add('copied');
-        setTimeout(() => {
-          copyBtn.classList.remove('copied');
-        }, 1500);
-      }).catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-    });
-
-    checkBtn.addEventListener('click', () => {
-      if (messageEl.querySelector('.reverse-check-result')) {
-        return; // 如果已经校验过，则不再重复请求
-      }
-
-      // 点击后提供视觉反馈
-      checkBtn.classList.add('checked');
-      setTimeout(() => {
-        checkBtn.classList.remove('checked');
-      }, 1500);
-
-      // 向后台脚本发送反向校验请求
-      chrome.runtime.sendMessage({
-        action: 'reverseCheck',
-        // 优先使用不带前缀的原始文本进行校验
-        textToTranslate: originalFullText || text
-      }, (response) => {
-        if (response && response.text) {
-          const checkResult = document.createElement('div');
-          checkResult.classList.add('reverse-check-result');
-          checkResult.textContent = `Verify (EN): ${response.text}`;
-          messageEl.appendChild(checkResult);
-          messageEl.classList.add('has-reverse-check');
-        } else {
-          const checkResult = document.createElement('div');
-          checkResult.classList.add('reverse-check-result');
-          checkResult.textContent = `Verify failed.`;
-          messageEl.appendChild(checkResult);
-          messageEl.classList.add('has-reverse-check');
+      copyBtn.addEventListener('click', () => {
+        // Extract the translation text (remove language prefix if present)
+        let textToCopy = originalFullText || text;
+        const colonIndex = textToCopy.indexOf(': ');
+        if (colonIndex > 0) {
+          textToCopy = textToCopy.substring(colonIndex + 2);
         }
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          // Visual feedback for successful copy
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+          }, 1500);
+        }).catch(err => {
+          // Handle copy error silently
+        });
       });
-    });
-  } else if (className === 'user-message') {
-    // 用户消息：添加“编辑”按钮
-    const editBtn = document.createElement('button');
-    editBtn.classList.add('edit-btn');
-    editBtn.title = 'Edit';
-    buttonContainer.appendChild(editBtn);
 
-    editBtn.addEventListener('click', () => {
-      // Extract user message text
-      let textToEdit = text;
+      checkBtn.addEventListener('click', () => {
+        if (messageEl.querySelector('.reverse-check-result')) {
+          return; // 如果已经校验过，则不再重复请求
+        }
 
-      // Fill the input textarea with the user message
-      userInputTextarea.value = textToEdit;
-      userInputTextarea.focus();
+        // 点击后提供视觉反馈
+        checkBtn.classList.add('checked');
+        setTimeout(() => {
+          checkBtn.classList.remove('checked');
+        }, 1500);
 
-      // Visual feedback for successful edit
-      editBtn.classList.add('edited');
-      setTimeout(() => {
-        editBtn.classList.remove('edited');
-      }, 1500);
+        // 向后台脚本发送反向校验请求
+        chrome.runtime.sendMessage({
+          action: 'reverseCheck',
+          // 优先使用不带前缀的原始文本进行校验
+          textToTranslate: originalFullText || text
+        }, (response) => {
+          if (response && response.text) {
+            const checkResult = document.createElement('div');
+            checkResult.classList.add('reverse-check-result');
+            checkResult.textContent = `Verify (EN): ${response.text}`;
+            messageEl.appendChild(checkResult);
+            messageEl.classList.add('has-reverse-check');
+          } else {
+            const checkResult = document.createElement('div');
+            checkResult.classList.add('reverse-check-result');
+            checkResult.textContent = `Verify failed.`;
+            messageEl.appendChild(checkResult);
+            messageEl.classList.add('has-reverse-check');
+          }
+        });
+      });
+    } else if (className && className.includes('user-message')) {
+      // 用户消息：添加“编辑”按钮
+      const editBtn = document.createElement('button');
+      editBtn.classList.add('edit-btn');
+      editBtn.title = 'Edit';
+      buttonContainer.appendChild(editBtn);
 
-      // Trigger input event to auto-resize textarea
-      userInputTextarea.dispatchEvent(new Event('input'));
+      editBtn.addEventListener('click', () => {
+        // Extract user message text
+        let textToEdit = text;
 
-      // Scroll to the input area
-      userInputTextarea.scrollIntoView({ behavior: 'smooth' });
-    });
+        // Fill the input textarea with the user message
+        userInputTextarea.value = textToEdit;
+        userInputTextarea.focus();
+
+        // Visual feedback for successful edit
+        editBtn.classList.add('edited');
+        setTimeout(() => {
+          editBtn.classList.remove('edited');
+        }, 1500);
+
+        // Trigger input event to auto-resize textarea
+        userInputTextarea.dispatchEvent(new Event('input'));
+
+        // Scroll to the input area
+        userInputTextarea.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
   }
 
   return messageEl;
@@ -304,7 +272,13 @@ function createMessageBubble(text, className, originalFullText = null) {
 
 // Display AI translation results
 function displayAiResults(data, isTutorMode) {
-  if (isTutorMode && data.mode === 'tutor' && data.corrected_text) {
+  // 显示检测到的语言（如果有）
+  if (data.detected_source_language) {
+    const infoMessage = createMessageBubble(`Detected Language: ${data.detected_source_language}`, 'ai-message info-message');
+    chatArea.appendChild(infoMessage);
+  }
+
+  if (isTutorMode && data.corrected_text) {
     const correctedUserMessage = createMessageBubble(`AI Tutor: ${data.corrected_text}`, 'ai-message', data.corrected_text);
     chatArea.appendChild(correctedUserMessage);
   }
@@ -326,15 +300,13 @@ function displayAiResults(data, isTutorMode) {
 // “发送”按钮的点击事件
 sendBtn.addEventListener('click', () => {
   const userInput = userInputTextarea.value.trim();
-  if (!userInput) return;
+  if (!userInput || sendBtn.disabled) return;
 
   const userMessage = createMessageBubble(userInput, 'user-message');
   chatArea.appendChild(userMessage);
   scrollChatToBottom();
 
-  const sourceLang = sourceLangSelect.value;
   const targetLangs = selectedTargetLanguages;
-
 
   // 如果未选择目标语言，则显示提示信息
   if (targetLangs.length === 0) {
@@ -345,14 +317,36 @@ sendBtn.addEventListener('click', () => {
     return;
   }
 
+  // 显示加载状态
+  const loadingBubble = createMessageBubble("Thinking...", 'ai-message loading-message');
+  chatArea.appendChild(loadingBubble);
+  scrollChatToBottom();
+
+  // 禁用输入和按钮
+  userInputTextarea.disabled = true;
+  sendBtn.disabled = true;
+  sendBtn.style.opacity = '0.5';
+  sendBtn.style.cursor = 'not-allowed';
+
   // 向后台脚本发送处理请求
   chrome.runtime.sendMessage({
     action: 'processInput',
     userInput: userInput,
-    sourceLanguage: sourceLang,
     targetLanguages: targetLangs,
     isTutorMode: isTutorMode
   }, (response) => {
+    // 移除加载提示
+    if (loadingBubble && loadingBubble.parentNode) {
+      loadingBubble.parentNode.removeChild(loadingBubble);
+    }
+
+    // 恢复输入和按钮
+    userInputTextarea.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.style.opacity = '1';
+    sendBtn.style.cursor = 'pointer';
+    userInputTextarea.focus();
+
     if (response) {
       displayAiResults(response, isTutorMode);
     } else {
