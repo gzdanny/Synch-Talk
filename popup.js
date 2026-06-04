@@ -165,102 +165,106 @@ function createMessageBubble(text, className, originalFullText = null) {
   messageEl.appendChild(textContent);
 
   // 为消息按钮创建一个容器，便于样式控制
-  const buttonContainer = document.createElement('div');
-  buttonContainer.classList.add('message-buttons');
-  messageEl.appendChild(buttonContainer);
+  const isStatusMessage = className && (className.includes('info-message') || className.includes('loading-message'));
+  
+  if (!isStatusMessage) {
+    const buttonContainer = document.createElement('div');
+    buttonContainer.classList.add('message-buttons');
+    messageEl.appendChild(buttonContainer);
 
-  if (className === 'ai-message') {
-    // AI消息：添加“反向校验”按钮
-    const checkBtn = document.createElement('button');
-    checkBtn.classList.add('reverse-check-btn');
-    checkBtn.title = 'Verify(EN)';
-    buttonContainer.appendChild(checkBtn);
+    if (className && className.includes('ai-message')) {
+      // AI消息：添加“反向校验”按钮
+      const checkBtn = document.createElement('button');
+      checkBtn.classList.add('reverse-check-btn');
+      checkBtn.title = 'Verify(EN)';
+      buttonContainer.appendChild(checkBtn);
 
-    // AI消息：添加“复制”按钮
-    const copyBtn = document.createElement('button');
-    copyBtn.classList.add('copy-btn');
-    copyBtn.title = 'Copy';
-    buttonContainer.appendChild(copyBtn);
+      // AI消息：添加“复制”按钮
+      const copyBtn = document.createElement('button');
+      copyBtn.classList.add('copy-btn');
+      copyBtn.title = 'Copy';
+      buttonContainer.appendChild(copyBtn);
 
-    copyBtn.addEventListener('click', () => {
-      // Extract the translation text (remove language prefix if present)
-      let textToCopy = originalFullText || text;
-      const colonIndex = textToCopy.indexOf(': ');
-      if (colonIndex > 0) {
-        textToCopy = textToCopy.substring(colonIndex + 2);
-      }
-
-      // Copy to clipboard
-      navigator.clipboard.writeText(textToCopy).then(() => {
-        // Visual feedback for successful copy
-        copyBtn.classList.add('copied');
-        setTimeout(() => {
-          copyBtn.classList.remove('copied');
-        }, 1500);
-      }).catch(err => {
-        console.error('Failed to copy text: ', err);
-      });
-    });
-
-    checkBtn.addEventListener('click', () => {
-      if (messageEl.querySelector('.reverse-check-result')) {
-        return; // 如果已经校验过，则不再重复请求
-      }
-
-      // 点击后提供视觉反馈
-      checkBtn.classList.add('checked');
-      setTimeout(() => {
-        checkBtn.classList.remove('checked');
-      }, 1500);
-
-      // 向后台脚本发送反向校验请求
-      chrome.runtime.sendMessage({
-        action: 'reverseCheck',
-        // 优先使用不带前缀的原始文本进行校验
-        textToTranslate: originalFullText || text
-      }, (response) => {
-        if (response && response.text) {
-          const checkResult = document.createElement('div');
-          checkResult.classList.add('reverse-check-result');
-          checkResult.textContent = `Verify (EN): ${response.text}`;
-          messageEl.appendChild(checkResult);
-          messageEl.classList.add('has-reverse-check');
-        } else {
-          const checkResult = document.createElement('div');
-          checkResult.classList.add('reverse-check-result');
-          checkResult.textContent = `Verify failed.`;
-          messageEl.appendChild(checkResult);
-          messageEl.classList.add('has-reverse-check');
+      copyBtn.addEventListener('click', () => {
+        // Extract the translation text (remove language prefix if present)
+        let textToCopy = originalFullText || text;
+        const colonIndex = textToCopy.indexOf(': ');
+        if (colonIndex > 0) {
+          textToCopy = textToCopy.substring(colonIndex + 2);
         }
+
+        // Copy to clipboard
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          // Visual feedback for successful copy
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+          }, 1500);
+        }).catch(err => {
+          console.error('Failed to copy text: ', err);
+        });
       });
-    });
-  } else if (className === 'user-message') {
-    // 用户消息：添加“编辑”按钮
-    const editBtn = document.createElement('button');
-    editBtn.classList.add('edit-btn');
-    editBtn.title = 'Edit';
-    buttonContainer.appendChild(editBtn);
 
-    editBtn.addEventListener('click', () => {
-      // Extract user message text
-      let textToEdit = text;
+      checkBtn.addEventListener('click', () => {
+        if (messageEl.querySelector('.reverse-check-result')) {
+          return; // 如果已经校验过，则不再重复请求
+        }
 
-      // Fill the input textarea with the user message
-      userInputTextarea.value = textToEdit;
-      userInputTextarea.focus();
+        // 点击后提供视觉反馈
+        checkBtn.classList.add('checked');
+        setTimeout(() => {
+          checkBtn.classList.remove('checked');
+        }, 1500);
 
-      // Visual feedback for successful edit
-      editBtn.classList.add('edited');
-      setTimeout(() => {
-        editBtn.classList.remove('edited');
-      }, 1500);
+        // 向后台脚本发送反向校验请求
+        chrome.runtime.sendMessage({
+          action: 'reverseCheck',
+          // 优先使用不带前缀的原始文本进行校验
+          textToTranslate: originalFullText || text
+        }, (response) => {
+          if (response && response.text) {
+            const checkResult = document.createElement('div');
+            checkResult.classList.add('reverse-check-result');
+            checkResult.textContent = `Verify (EN): ${response.text}`;
+            messageEl.appendChild(checkResult);
+            messageEl.classList.add('has-reverse-check');
+          } else {
+            const checkResult = document.createElement('div');
+            checkResult.classList.add('reverse-check-result');
+            checkResult.textContent = `Verify failed.`;
+            messageEl.appendChild(checkResult);
+            messageEl.classList.add('has-reverse-check');
+          }
+        });
+      });
+    } else if (className && className.includes('user-message')) {
+      // 用户消息：添加“编辑”按钮
+      const editBtn = document.createElement('button');
+      editBtn.classList.add('edit-btn');
+      editBtn.title = 'Edit';
+      buttonContainer.appendChild(editBtn);
 
-      // Trigger input event to auto-resize textarea
-      userInputTextarea.dispatchEvent(new Event('input'));
+      editBtn.addEventListener('click', () => {
+        // Extract user message text
+        let textToEdit = text;
 
-      // Scroll to the input area
-      userInputTextarea.scrollIntoView({ behavior: 'smooth' });
-    });
+        // Fill the input textarea with the user message
+        userInputTextarea.value = textToEdit;
+        userInputTextarea.focus();
+
+        // Visual feedback for successful edit
+        editBtn.classList.add('edited');
+        setTimeout(() => {
+          editBtn.classList.remove('edited');
+        }, 1500);
+
+        // Trigger input event to auto-resize textarea
+        userInputTextarea.dispatchEvent(new Event('input'));
+
+        // Scroll to the input area
+        userInputTextarea.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
   }
 
   return messageEl;
@@ -268,7 +272,13 @@ function createMessageBubble(text, className, originalFullText = null) {
 
 // Display AI translation results
 function displayAiResults(data, isTutorMode) {
-  if (isTutorMode && data.mode === 'tutor' && data.corrected_text) {
+  // 显示检测到的语言（如果有）
+  if (data.detected_source_language) {
+    const infoMessage = createMessageBubble(`Detected Language: ${data.detected_source_language}`, 'ai-message info-message');
+    chatArea.appendChild(infoMessage);
+  }
+
+  if (isTutorMode && data.corrected_text) {
     const correctedUserMessage = createMessageBubble(`AI Tutor: ${data.corrected_text}`, 'ai-message', data.corrected_text);
     chatArea.appendChild(correctedUserMessage);
   }

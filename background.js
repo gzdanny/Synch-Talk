@@ -10,79 +10,64 @@
  */
 function buildDynamicPrompt(userInput, targetLanguages, isTutorMode, isGemini) {
   const targetLanguagesString = targetLanguages.join(', ');
-  // 为JSON格式示例创建翻译占位符
-  const translationsExample = targetLanguages.slice(1).map(lang => `"${lang}": "Translation in ${lang}"`).join(',\n      ');
+  const translationsExample = targetLanguages.slice(0, 2).map(lang => `"${lang}": "..."`).join(', ');
 
-  // Gemini模型使用更详细的JSON格式化指令
+  const persona = `You are a professional linguistic expert and localization specialist proficient in ${targetLanguagesString}.`;
+  
+  const rules = `
+  ### Strict Rules for Translation
+  - **Localization over Literalism**: Do NOT translate word-for-word. Focus on capturing the underlying meaning, tone, and cultural context.
+  - **Professional Terminology**: Identify professional, technical, or industry-specific terms. Research or apply their standardized target-language equivalents (industry-standard nomenclature) rather than literal translations.
+  - **Native Fluency**: The output must sound as if it were written by a native speaker in each target language.
+  - **Exclusion Rule**: The "translations" object MUST NOT contain the detected source language.`;
+
   if (isGemini) {
     const safeUserInput = JSON.stringify(userInput);
-    let prompt = `You are a multilingual communication expert. The user has selected a set of active languages: ${targetLanguagesString}.
-    
-    User Input: ${safeUserInput}
-    
-    Instructions:
-    1. Detect the language of the User Input.
-    2. **CRITICAL RULE**: The "translations" object MUST NOT include the detected source language. Only translate into the OTHER languages from the active list.
-    
-    Mode-Specific Task:`;
+    let taskDescription = isTutorMode ? 
+    `### Task
+    1. **Detect** the source language of the input.
+    2. **Polish** the input text for natural flow, grammatical accuracy, and idiomatic correctness (store in "corrected_text").
+    3. **Translate** the polished text into the OTHER active languages in the list: ${targetLanguagesString}.` :
+    `### Task
+    1. **Detect** the source language of the input.
+    2. **Translate** the input text into the OTHER active languages in the list: ${targetLanguagesString}.`;
 
-    if (isTutorMode) {
-      prompt += `
-    - **AI TUTOR MODE**: 
-       a. Rewrite and polish the User Input in its original language (natural/idiomatic). Store this in "corrected_text".
-       b. Translate this polished version into ALL OTHER languages in the active list.
-    
-    Output Format:
+    const format = `
+    ### Output Format (JSON Only)
     {
-      "mode": "tutor",
-      "corrected_text": "Polished version",
-      "translations": {
-        // Exclude source language here
-        ${translationsExample}
-      }
-    }`;
-    } else {
-      prompt += `
-    - **TRANSLATOR MODE**: 
-       a. Translate the User Input into ALL OTHER languages in the active list.
-    
-    Output Format:
-    {
-      "mode": "translator",
-      "translations": {
-        // Exclude source language here
-        ${translationsExample}
-      }
-    }`;
-    }
-    prompt += `\n\nProvide your output ONLY in a valid JSON format.`;
-    return prompt;
-  }
-
-  // OpenAI或兼容接口使用不同的提示结构
-  else {
-    const promptPrefix = `You are an expert polyglot. Active languages: ${targetLanguagesString}.
-    Task: Detect source language. Translate ONLY to the other languages in the list. 
-    STRICT RULE: The "translations" object MUST NOT contain the detected source language key.`;
-
-    const instructions = isTutorMode ?
-      `MODE: AI TUTOR. 
-      1. Polish input in its detected language (store in "corrected_text").
-      2. Translate polished version to OTHER active languages (exclude source from "translations").` :
-      `MODE: TRANSLATOR. 
-      Translate to OTHER active languages (exclude source from "translations").`;
-
-    const jsonFormatExample = `JSON format:
-    {
-      "mode": "${isTutorMode ? "tutor" : "translator"}",
+      "mode": "${isTutorMode ? 'tutor' : 'translator'}",
+      "detected_source_language": "...",
       ${isTutorMode ? '"corrected_text": "...",' : ''}
       "translations": {
-        "TargetLang1": "...", 
-        "TargetLang2": "..." 
+        ${translationsExample}
       }
     }`;
 
-    return `${promptPrefix}\n\nInstructions: ${instructions}\n\n${jsonFormatExample}`;
+    // 重新组合顺序：身份 -> 用户输入 -> 任务 -> 规则 -> 格式
+    return `${persona}
+
+### User Input to Process:
+<<<<
+${safeUserInput}
+>>>>
+
+${taskDescription}
+
+${rules}
+
+${format}
+
+**Final Requirement**: Provide your output ONLY in a valid JSON format. Do not include any conversational text outside the JSON.`;
+  } else {
+    // OpenAI 兼容格式
+    const systemPrompt = `${persona}
+    ${isTutorMode ? 'Task: Detect source, Polish input (store in "corrected_text"), and Translate to OTHER active languages.' : 'Task: Detect source and Translate to OTHER active languages.'}
+    Active languages: ${targetLanguagesString}.
+    ${rules}
+    
+    Output JSON keys: "mode", "detected_source_language", ${isTutorMode ? '"corrected_text", ' : ''}"translations".`;
+
+    return systemPrompt;
   }
 }
 
