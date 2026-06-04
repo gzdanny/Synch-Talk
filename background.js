@@ -3,75 +3,82 @@
 /**
  * 根据用户输入、语言设置和模式，为AI模型构建动态提示。
  * @param {string} userInput - 用户输入的文本。
- * @param {string} sourceLanguage - 源语言。
  * @param {string[]} targetLanguages - 目标语言数组。
  * @param {boolean} isTutorMode - 是否启用AI导师模式。
  * @param {boolean} isGemini - 是否为Gemini模型（影响提示格式）。
  * @returns {string} - 构建好的AI提示字符串。
  */
-function buildDynamicPrompt(userInput, sourceLanguage, targetLanguages, isTutorMode, isGemini) {
+function buildDynamicPrompt(userInput, targetLanguages, isTutorMode, isGemini) {
   const targetLanguagesString = targetLanguages.join(', ');
   // 为JSON格式示例创建翻译占位符
-  const translationsExample = targetLanguages.map(lang => `"${lang}": "${lang} Translation."`).join(',\n      ');
+  const translationsExample = targetLanguages.slice(1).map(lang => `"${lang}": "Translation in ${lang}"`).join(',\n      ');
 
   // Gemini模型使用更详细的JSON格式化指令
   if (isGemini) {
     const safeUserInput = JSON.stringify(userInput);
-    let prompt = `Translate the following text based on the given instructions.
+    let prompt = `You are a multilingual communication expert. The user has selected a set of active languages: ${targetLanguagesString}.
     
-    Source Language: ${sourceLanguage}
-    Target Languages: ${targetLanguagesString}
     User Input: ${safeUserInput}
     
-    Provide your output ONLY in a valid JSON format.`;
+    Instructions:
+    1. Detect the language of the User Input.
+    2. **CRITICAL RULE**: The "translations" object MUST NOT include the detected source language. Only translate into the OTHER languages from the active list.
+    
+    Mode-Specific Task:`;
 
     if (isTutorMode) {
-      prompt += `\n\n**MODE: AI TUTOR**
-    Your task is to correct the user's input for natural phrasing in ${sourceLanguage}, then translate the corrected version.
+      prompt += `
+    - **AI TUTOR MODE**: 
+       a. Rewrite and polish the User Input in its original language (natural/idiomatic). Store this in "corrected_text".
+       b. Translate this polished version into ALL OTHER languages in the active list.
     
-    The JSON output should have a "mode" field ('tutor'), "corrected_text", and a "translations" object.
+    Output Format:
     {
       "mode": "tutor",
-      "corrected_text": "The corrected and improved version of the input.",
+      "corrected_text": "Polished version",
       "translations": {
+        // Exclude source language here
         ${translationsExample}
       }
     }`;
     } else {
-      prompt += `\n\n**MODE: TRANSLATOR**
-    Your task is to provide natural, idiomatic translations of the user's input.
+      prompt += `
+    - **TRANSLATOR MODE**: 
+       a. Translate the User Input into ALL OTHER languages in the active list.
     
-    The JSON output should have a "mode" field ('translator') and a "translations" object.
+    Output Format:
     {
       "mode": "translator",
       "translations": {
+        // Exclude source language here
         ${translationsExample}
       }
     }`;
     }
+    prompt += `\n\nProvide your output ONLY in a valid JSON format.`;
     return prompt;
   }
 
   // OpenAI或兼容接口使用不同的提示结构
   else {
-    const promptPrefix = `You are an expert translator.
-    You will receive user input, a source language, and a list of target languages.
-    Your task is to provide a translation based on the instructions below.
-    The response must be a single, valid JSON object, and nothing else.
-    Source Language: ${sourceLanguage}
-    Target Languages: ${targetLanguagesString}
-    `;
+    const promptPrefix = `You are an expert polyglot. Active languages: ${targetLanguagesString}.
+    Task: Detect source language. Translate ONLY to the other languages in the list. 
+    STRICT RULE: The "translations" object MUST NOT contain the detected source language key.`;
 
     const instructions = isTutorMode ?
-      `Correct the user's input for natural phrasing in ${sourceLanguage}, then translate the corrected version into all target languages. The JSON must contain "mode": "tutor", "corrected_text", and a "translations" object.` :
-      `Translate the user's input into all target languages. The JSON must contain "mode": "translator" and a "translations" object.`;
+      `MODE: AI TUTOR. 
+      1. Polish input in its detected language (store in "corrected_text").
+      2. Translate polished version to OTHER active languages (exclude source from "translations").` :
+      `MODE: TRANSLATOR. 
+      Translate to OTHER active languages (exclude source from "translations").`;
 
-    const jsonFormatExample = `the JSON should look like this:
+    const jsonFormatExample = `JSON format:
     {
       "mode": "${isTutorMode ? "tutor" : "translator"}",
-      ${isTutorMode ? '"corrected_text": "The corrected and improved version of the input.",' : ''}
+      ${isTutorMode ? '"corrected_text": "...",' : ''}
       "translations": {
-        ${translationsExample}
+        "TargetLang1": "...", 
+        "TargetLang2": "..." 
       }
     }`;
 
@@ -129,6 +136,9 @@ function cleanApiResponse(text) {
  * @returns {Promise<object>} - 返回一个包含API响应数据或错误信息的对象。
  */
 async function makeApiCall(provider, endpoint, headers, body) {
+  console.log(`[${provider}] Making API call to: ${endpoint}`);
+  console.log(`[${provider}] Request Headers:`, headers);
+  console.log(`[${provider}] Request Body:`, body);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -156,12 +166,12 @@ async function makeApiCall(provider, endpoint, headers, body) {
 /**
  * 处理AI输入的核心函数，根据用户设置调用不同的AI服务进行翻译或语法修正。
  * @param {string} userInput - 用户输入的文本。
- * @param {string} sourceLanguage - 源语言。
  * @param {string[]} targetLanguages - 目标语言数组。
  * @param {boolean} isTutorMode - 是否启用AI导师模式。
  * @returns {Promise<object>} - 返回一个包含翻译结果、修正文本或错误信息的对象。
  */
-async function processAiInput(userInput, sourceLanguage, targetLanguages, isTutorMode) {
+async function processAiInput(userInput, targetLanguages, isTutorMode) {
+  console.log('background.js: processAiInput called', { userInput, targetLanguages, isTutorMode });
   const settings = await chrome.storage.local.get(['aiProvider', 'geminiApiKey', 'geminiModel', 'openAiUrl', 'openAiApiKey', 'openAiModel']);
   const provider = settings.aiProvider || 'gemini';
 
@@ -174,7 +184,8 @@ async function processAiInput(userInput, sourceLanguage, targetLanguages, isTuto
       return { error: 'Please set your Gemini API key in the options page.' };
     }
     const model = settings.geminiModel || 'gemini-flash-latest'; // Default to gemini-flash-latest if not set
-    prompt = buildDynamicPrompt(userInput, sourceLanguage, targetLanguages, isTutorMode, true);
+    prompt = buildDynamicPrompt(userInput, targetLanguages, isTutorMode, true);
+    console.log(`[Gemini] Generated Prompt:\n${prompt}`);
     const body = { contents: [{ parts: [{ text: prompt }] }] };
     const headers = { 'Content-Type': 'application/json', 'X-goog-api-key': settings.geminiApiKey };
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -195,7 +206,8 @@ async function processAiInput(userInput, sourceLanguage, targetLanguages, isTuto
     if (!openAiUrl || !openAiApiKey || !openAiModel) {
       return { error: 'Please set your OpenAI-compatible API URL, key, and model in the options page.' };
     }
-    prompt = buildDynamicPrompt(userInput, sourceLanguage, targetLanguages, isTutorMode, false);
+    prompt = buildDynamicPrompt(userInput, targetLanguages, isTutorMode, false);
+    console.log(`[OpenAI] Generated Prompt:\n${prompt}`);
     const body = {
       model: openAiModel,
       response_format: { type: "json_object" },
@@ -342,8 +354,8 @@ chrome.action.onClicked.addListener(async (tab) => {
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'processInput') {
-    const { userInput, sourceLanguage, targetLanguages, isTutorMode } = request;
-    processAiInput(userInput, sourceLanguage, targetLanguages, isTutorMode).then(sendResponse);
+    const { userInput, targetLanguages, isTutorMode } = request;
+    processAiInput(userInput, targetLanguages, isTutorMode).then(sendResponse);
     return true;
   } else if (request.action === 'reverseCheck') {
     const { textToTranslate } = request;

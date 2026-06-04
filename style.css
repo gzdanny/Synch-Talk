@@ -25,13 +25,14 @@ body {
   left: 0;
   right: 0;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px;
-  background-color: rgba(26, 26, 26, 0.75);
+  padding: 8px 12px;
+  background-color: rgba(26, 26, 26, 0.85);
   z-index: 10;
   transition: transform 0.3s ease-in-out;
   border-bottom: 1px solid #333;
+  height: 50px;
+  box-sizing: border-box;
 }
 
 .header-hidden {
@@ -40,32 +41,32 @@ body {
 
 .language-select {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   flex: 1;
-  margin-right: 10px;
-}
-
-.language-select:last-child {
-  margin-right: 0;
+  gap: 10px;
 }
 
 .language-select label {
-  font-size: 0.8em;
+  font-size: 0.9em;
   color: #bbb;
-  margin-bottom: 5px;
+  white-space: nowrap;
 }
 
-select,
 .custom-select-trigger {
+  flex: 1;
   background-color: #333;
   color: #e0e0e0;
   border: 1px solid #555;
   border-radius: 8px;
-  padding: 8px;
+  padding: 0 10px;
   font-size: 0.9em;
-  height: 38px;
-  line-height: 22px;
+  height: 32px;
+  line-height: 32px;
   box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 select {
@@ -124,6 +125,18 @@ select:focus {
   color: #e0e0e0;
   align-self: flex-start;
   border-bottom-left-radius: 4px;
+}
+
+.loading-message {
+  opacity: 0.7;
+  font-style: italic;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.4; }
 }
 
 /* 消息按钮容器 */

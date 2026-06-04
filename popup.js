@@ -1,5 +1,4 @@
 // --- DOM元素获取 ---
-const sourceLangSelect = document.getElementById('source-language');
 const targetLangTrigger = document.getElementById('target-languages-display');
 const targetLangOptionsContainer = document.getElementById('target-languages-options');
 const targetLangContainer = document.getElementById('target-language-select-container');
@@ -16,19 +15,10 @@ let isTutorMode = false;
 // --- 语言选择相关功能 ---
 
 /**
- * 初始化时填充源语言和目标语言的下拉菜单。
- * 源语言使用标准的 <option> 元素。
+ * 初始化时填充目标语言的选择菜单。
  * 目标语言使用带复选框的自定义菜单项。
  */
 function populateLanguages() {
-  // 填充源语言下拉菜单
-  languages.forEach(lang => {
-    const sourceOption = document.createElement('option');
-    sourceOption.value = lang;
-    sourceOption.textContent = lang;
-    sourceLangSelect.appendChild(sourceOption);
-  });
-
   // 动态创建目标语言的多选菜单
   targetLangOptionsContainer.innerHTML = '';
   languages.forEach(lang => {
@@ -61,41 +51,19 @@ function updateSelectedTargetLanguages() {
   saveSettings();
 
   if (selectedTargetLanguages.length === 0) {
-    targetLangTrigger.textContent = 'Please select target languages';
+    targetLangTrigger.textContent = 'Please select';
   } else {
     targetLangTrigger.textContent = selectedTargetLanguages.join(', ');
   }
 }
 
-/**
- * 根据当前选择的源语言，禁用或启用目标语言选项。
- * 规则：目标语言不能与源语言相同。
- * 调用此函数后会同步更新已选中的目标语言列表。
- */
-function updateTargetLanguagesAvailability() {
-  const selectedSourceLang = sourceLangSelect.value;
-  targetLangOptionsContainer.querySelectorAll('.custom-select-option').forEach(optionDiv => {
-    const checkbox = optionDiv.querySelector('input[type="checkbox"]');
-    if (checkbox.value === selectedSourceLang) {
-      optionDiv.classList.add('disabled');
-      checkbox.disabled = true;
-      checkbox.checked = false;
-    } else {
-      optionDiv.classList.remove('disabled');
-      checkbox.disabled = false;
-    }
-  });
-  updateSelectedTargetLanguages();
-}
-
 // --- 设置的保存与加载 ---
 
 /**
- * 将当前的用户设置（源语言、目标语言、导师模式）保存到 chrome.storage.local。
+ * 将当前的用户设置（目标语言、导师模式）保存到 chrome.storage.local。
  */
 function saveSettings() {
   const settings = {
-    sourceLanguage: sourceLangSelect.value,
     targetLanguages: selectedTargetLanguages,
     isTutorMode: isTutorMode
   };
@@ -108,11 +76,7 @@ function saveSettings() {
 function loadSettings() {
   chrome.storage.local.get('settings', (data) => {
     if (data.settings) {
-      const { sourceLanguage, targetLanguages, isTutorMode: loadedTutorMode } = data.settings;
-      if (sourceLanguage) {
-        sourceLangSelect.value = sourceLanguage;
-      }
-
+      const { targetLanguages, isTutorMode: loadedTutorMode } = data.settings;
       selectedTargetLanguages = targetLanguages || [];
       isTutorMode = loadedTutorMode;
       // 更新UI以反映加载的设置
@@ -122,7 +86,7 @@ function loadSettings() {
         checkbox.checked = selectedTargetLanguages.includes(checkbox.value);
       });
     }
-    updateTargetLanguagesAvailability();
+    updateSelectedTargetLanguages();
   });
 }
 
@@ -141,12 +105,6 @@ targetLangOptionsContainer.addEventListener('click', (event) => {
       updateSelectedTargetLanguages();
     }
   }
-});
-
-// 监听源语言下拉菜单的变化
-sourceLangSelect.addEventListener('change', () => {
-  updateTargetLanguagesAvailability();
-  saveSettings();
 });
 
 // 监听导师模式开关的点击事件
@@ -194,7 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 function createMessageBubble(text, className, originalFullText = null) {
   const messageEl = document.createElement('div');
-  messageEl.classList.add('message', className);
+  messageEl.classList.add('message');
+  // 如果className包含多个类（用空格分隔），则逐个添加
+  if (className) {
+    className.split(' ').forEach(cls => {
+      if (cls.trim()) messageEl.classList.add(cls.trim());
+    });
+  }
 
   const textContent = document.createElement('p');
   textContent.textContent = text;
@@ -326,15 +290,13 @@ function displayAiResults(data, isTutorMode) {
 // “发送”按钮的点击事件
 sendBtn.addEventListener('click', () => {
   const userInput = userInputTextarea.value.trim();
-  if (!userInput) return;
+  if (!userInput || sendBtn.disabled) return;
 
   const userMessage = createMessageBubble(userInput, 'user-message');
   chatArea.appendChild(userMessage);
   scrollChatToBottom();
 
-  const sourceLang = sourceLangSelect.value;
   const targetLangs = selectedTargetLanguages;
-
 
   // 如果未选择目标语言，则显示提示信息
   if (targetLangs.length === 0) {
@@ -345,14 +307,37 @@ sendBtn.addEventListener('click', () => {
     return;
   }
 
+  // 显示加载状态
+  const loadingBubble = createMessageBubble("Thinking...", 'ai-message loading-message');
+  chatArea.appendChild(loadingBubble);
+  scrollChatToBottom();
+
+  // 禁用输入和按钮
+  userInputTextarea.disabled = true;
+  sendBtn.disabled = true;
+  sendBtn.style.opacity = '0.5';
+  sendBtn.style.cursor = 'not-allowed';
+
   // 向后台脚本发送处理请求
+  console.log('popup.js: Sending processInput message to background', { userInput, targetLanguages: targetLangs, isTutorMode });
   chrome.runtime.sendMessage({
     action: 'processInput',
     userInput: userInput,
-    sourceLanguage: sourceLang,
     targetLanguages: targetLangs,
     isTutorMode: isTutorMode
   }, (response) => {
+    // 移除加载提示
+    if (loadingBubble && loadingBubble.parentNode) {
+      loadingBubble.parentNode.removeChild(loadingBubble);
+    }
+
+    // 恢复输入和按钮
+    userInputTextarea.disabled = false;
+    sendBtn.disabled = false;
+    sendBtn.style.opacity = '1';
+    sendBtn.style.cursor = 'pointer';
+    userInputTextarea.focus();
+
     if (response) {
       displayAiResults(response, isTutorMode);
     } else {
