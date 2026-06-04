@@ -121,9 +121,6 @@ function cleanApiResponse(text) {
  * @returns {Promise<object>} - 返回一个包含API响应数据或错误信息的对象。
  */
 async function makeApiCall(provider, endpoint, headers, body) {
-  console.log(`[${provider}] Making API call to: ${endpoint}`);
-  console.log(`[${provider}] Request Headers:`, headers);
-  console.log(`[${provider}] Request Body:`, body);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -132,8 +129,6 @@ async function makeApiCall(provider, endpoint, headers, body) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API Error Response from ${provider}:`, errorText);
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
 
@@ -141,7 +136,6 @@ async function makeApiCall(provider, endpoint, headers, body) {
     return data;
 
   } catch (error) {
-    console.error(`API call to ${provider} failed:`, error);
     return { error: `Unable to connect to ${provider} API: ${error.message}` };
   }
 }
@@ -156,7 +150,6 @@ async function makeApiCall(provider, endpoint, headers, body) {
  * @returns {Promise<object>} - 返回一个包含翻译结果、修正文本或错误信息的对象。
  */
 async function processAiInput(userInput, targetLanguages, isTutorMode) {
-  console.log('background.js: processAiInput called', { userInput, targetLanguages, isTutorMode });
   const settings = await chrome.storage.local.get(['aiProvider', 'geminiApiKey', 'geminiModel', 'openAiUrl', 'openAiApiKey', 'openAiModel']);
   const provider = settings.aiProvider || 'gemini';
 
@@ -170,7 +163,6 @@ async function processAiInput(userInput, targetLanguages, isTutorMode) {
     }
     const model = settings.geminiModel || 'gemini-flash-latest'; // Default to gemini-flash-latest if not set
     prompt = buildDynamicPrompt(userInput, targetLanguages, isTutorMode, true);
-    console.log(`[Gemini] Generated Prompt:\n${prompt}`);
     const body = { contents: [{ parts: [{ text: prompt }] }] };
     const headers = { 'Content-Type': 'application/json', 'X-goog-api-key': settings.geminiApiKey };
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
@@ -192,7 +184,6 @@ async function processAiInput(userInput, targetLanguages, isTutorMode) {
       return { error: 'Please set your OpenAI-compatible API URL, key, and model in the options page.' };
     }
     prompt = buildDynamicPrompt(userInput, targetLanguages, isTutorMode, false);
-    console.log(`[OpenAI] Generated Prompt:\n${prompt}`);
     const body = {
       model: openAiModel,
       response_format: { type: "json_object" },

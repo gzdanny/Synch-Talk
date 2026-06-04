@@ -201,7 +201,7 @@ function createMessageBubble(text, className, originalFullText = null) {
             copyBtn.classList.remove('copied');
           }, 1500);
         }).catch(err => {
-          console.error('Failed to copy text: ', err);
+          // Handle copy error silently
         });
       });
 
@@ -329,7 +329,6 @@ sendBtn.addEventListener('click', () => {
   sendBtn.style.cursor = 'not-allowed';
 
   // 向后台脚本发送处理请求
-  console.log('popup.js: Sending processInput message to background', { userInput, targetLanguages: targetLangs, isTutorMode });
   chrome.runtime.sendMessage({
     action: 'processInput',
     userInput: userInput,

@@ -11,14 +11,10 @@ if (chrome.runtime && chrome.runtime.id) {
     title: document.title,
     text: '' // No text selected initially
   }, function () {
-    if (chrome.runtime.lastError) {
-      console.error('Content script: Error sending initial message:', chrome.runtime.lastError.message);
-    }
+    // Message sent successfully or ignored
   });
 } else {
-  // If chrome.runtime is not available (e.g., extension context invalidated),
-  // log a warning but do not throw an error.
-  console.warn('Content script: chrome.runtime not available, cannot send initial message.');
+  // chrome.runtime not available
 }
 
 // Track mouse coordinates for element selection
@@ -63,14 +59,10 @@ document.addEventListener('keydown', (event) => {
           url: window.location.href,
           title: document.title
         }, function () {
-          if (chrome.runtime.lastError) {
-            // 记录消息发送时可能发生的错误，通常是由于扩展上下文失效。
-            console.error('Content script: Error sending keydown message:', chrome.runtime.lastError.message);
-          }
+          // Message sent successfully or ignored
         });
       } else {
-        // If chrome.runtime is not available, log a warning.
-        console.warn('Content script: chrome.runtime not available, cannot send keydown message.');
+        // chrome.runtime not available
       }
     }
   }
